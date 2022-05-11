@@ -62,4 +62,4 @@ COPY . /code
 
 RUN ["python", "manage.py", "collectstatic", "--noinput"]
 RUN ["python", "manage.py", "compress"]
-CMD python manage.py runserver
+CMD python manage.py test

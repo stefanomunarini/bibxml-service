@@ -28,9 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Build the Docker image and start the environment
-        run: docker compose -f docker-compose.test.yml up
-      - name: Run tests
-        run: docker compose exec test python manage.py test main.tests.test_query
+        run: docker compose -f docker-compose.test.yml run
+#      - name: Run tests
+#        run: docker compose run test python manage.py test main.tests.test_query
       - name: Dump docker logs on failure
         if: always()
         uses: jwalton/gh-docker-logs@v1
