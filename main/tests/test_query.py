@@ -6,7 +6,6 @@ from unittest import TestCase
 from django.core.management import call_command
 from django.db.models import QuerySet, Q
 
-from bib_models import DocID
 from main.exceptions import RefNotFoundError
 from main.models import RefData
 from main.query import (
@@ -79,7 +78,7 @@ class QueryTestCase(TestCase):
         Test that search_refs_relaton_struct returns an empty list of
         results when called with an empty list of objs.
         """
-        objs: List[Any]
+        objs: List[Any] = []
         refs = search_refs_relaton_struct(*objs)
         self.assertIsInstance(refs, QuerySet[RefData])
         self.assertEqual(refs.count(), 0)
