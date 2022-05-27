@@ -1,11 +1,12 @@
 """Responsible for Crossref interaction."""
-
-from typing import List, Dict, Any
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 
 from pydantic import ValidationError
 from crossref.restful import Works, Etiquette
 
 from django.conf import settings
+from relaton.models import BibliographicItem
 
 from common.util import as_list
 
@@ -54,6 +55,12 @@ def get_bibitem(docid: DocID, strict: bool = True) \
     if not resp:
         raise RefNotFoundError
 
+    volume: str = "vol. %s" % resp.get("volume")
+    page: str = resp.get("page")
+
+    # if resp["journal-issue"].get("issue", False):
+    #     journal_issue: JournalIssue = ", no. %s" % resp["journal-issue"]["issue"]
+
     docids: List[DocID] = [
         DocID(type='DOI', id=resp['DOI']),
 
@@ -75,13 +82,96 @@ def get_bibitem(docid: DocID, strict: bool = True) \
         *(to_contributor('chair', chair)
           for chair in resp.get('chair', [])),
     ]
-    if 'publisher' in resp:
+
+    series_info: Dict[Any] = {"seriesinfo": {}}
+    if resp.get("container-title", False):
+        ct = resp.get("container-title")
+        info = []
+        if resp.get("volume", False):
+            vi = "vol. %s" % resp.get("volume")
+
+            if resp.get("journal-issue", False):
+                if resp["journal-issue"].get("issue", False):
+                    vi += ", no. %s" % resp["journal-issue"]["issue"]
+
+            info.append(vi)
+
+        if resp.get("page", False):
+            info.append("pp. %s" % resp["page"])
+
+        if info:
+            series_info["seriesinfo"][ct] = ", ".join(info)
+        else:
+            # https://github.com/cabo/kramdown-rfc2629/blob/d006536e2bab3aa9b8a70464710a725ca98a3051/bin/doilit#L91
+            # very strange and unsafe, need explanation:
+            spl = ct.split(" ")
+
+            series_info["seriesinfo"][" ".join(spl[0:-1])] = spl[-1]
+
+    elif resp.get("publisher", False):
+        info = []
+        publisher = resp["publisher"]
+        if resp.get("type", False):
+            info.append(resp["type"])
+
+        if info:
+            series_info["seriesinfo"][publisher] = ", ".join(info)
+        else:
+            # https://github.com/cabo/kramdown-rfc2629/blob/d006536e2bab3aa9b8a70464710a725ca98a3051/bin/doilit#L104
+            # very strange and unsafe, need explanation:
+            spl = publisher.split(" ")
+            series_info["seriesinfo"][" ".join(spl[0:-1])] = spl[-1]
+
         contributors.append(Contributor(
             role=['publisher'],
             organization=Organization(
                 name=resp.get('publisher'),
             ),
         ))
+
+            # if "container-title" in resp:
+    #     # ct = resp.get("container-title")
+    #     info = []
+    #     if resp.get("volume", False):
+    #         vi = "vol. %s" % resp.get("volume")
+    #
+    #         if resp.get("journal-issue", False):
+    #             if resp["journal-issue"].get("issue", False):
+    #                 vi += ", no. %s" % resp["journal-issue"]["issue"]
+    #
+    #     if resp.get("page", False):
+    #         info.append("pp. %s" % resp["page"])
+    #
+    # elif 'publisher' in resp:
+    #     # info = []
+    #     # publisher = data["publisher"]
+    #
+    #     contributors.append(Contributor(
+    #         role=['publisher'],
+    #         organization=Organization(
+    #             name=resp.get('publisher'),
+    #         ),
+    #     ))
+
+        # if resp.get("type", False):
+        #     info.append(resp["type"])
+
+        # if info:
+        #     result["seriesinfo"][publisher] = ", ".join(info)
+        # else:
+        #     # https://github.com/cabo/kramdown-rfc2629/blob/d006536e2bab3aa9b8a70464710a725ca98a3051/bin/doilit#L104
+        #     # very strange and unsafe, need explanation:
+        #     spl = publisher.split(" ")
+        #     result["seriesinfo"][" ".join(spl[0:-1])] = spl[-1]
+
+
+    # if 'publisher' in resp:
+    #     contributors.append(Contributor(
+    #         role=['publisher'],
+    #         organization=Organization(
+    #             name=resp.get('publisher'),
+    #         ),
+    #     ))
 
     titles: List[Title] = [
         *(Title(content=title, type=None)
@@ -117,7 +207,12 @@ def get_bibitem(docid: DocID, strict: bool = True) \
             'content': resp['abstract'],
         }] if 'abstract' in resp else [],
         contributor=contributors,
+        series_info=series_info,
+        volume=vi,
+        page=info[0] if len(info) > 0 else None
     )
+    import ipdb; ipdb.set_trace()
+
 
     errors = []
     if strict:
